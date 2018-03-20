@@ -8,7 +8,7 @@ def Parse_PDB(pdbfiles):
 	PDB_names = []
 	for file in pdbfiles:
 		name = file.split(".")[0]
-		pdb = PDBParser().get_structure(name, file)
+		pdb = PDBParser(QUIET=True).get_structure(name, file)
 		PDB_objects.append(pdb)
 		PDB_names.append(name)
 	return (PDB_objects, PDB_names)
@@ -17,10 +17,10 @@ def SplitChain(PDB_objects):
 	"""
 	Splits a list of PDB files by chain creating one PDB and one FASTA file per chain.
 	"""
-	chain_names = set()
 	File_prefix = []
 
 	for pdb in PDB_objects:
+		chain_names = set()
 		io = PDBIO()
 
 		# Creates a PDB file for each chain of the original file.
@@ -61,23 +61,23 @@ def Select_template(BLAST_outs):
 	Outputs = {}
 
 	for Out in BLAST_outs:
-		Blast_out = open(Out)
+		BLAST_out = open(Out)
 		First = True
-		for line in Blast_out:
+		for line in BLAST_out:
 			if line.startswith("Sequences producing significant alignments:"):
-				Blast_out.readline()
-				for line in Blast_out:
+				BLAST_out.readline()
+				for line in BLAST_out:
 					line = line.strip()
 					line = line.split()
 					if First:
-						Min_evalue = line[len(line)-1]
-						Template_evalue = [(line[0][:-2], line[len(line)-1])]
-						Outputs[Out] = Template_evalue
+						min_evalue = line[len(line)-1]
+						template_evalue = [(line[0][:-2], line[len(line)-1])]
+						Outputs[Out] = template_evalue
 						First = False
 					else:
-						if line[len(line)-1] == Min_evalue:
-							Template_evalue.append((line[0][:-2], line[len(line)-1]))
-							Outputs[Out] = Template_evalue
+						if line[len(line)-1] == min_evalue:
+							template_evalue.append((line[0][:-2], line[len(line)-1]))
+							Outputs[Out] = template_evalue
 						else:
 							break
 	# Select all possible best templates, the ones with the minimum evalue.
@@ -86,9 +86,61 @@ def Select_template(BLAST_outs):
 	for value in Outputs.values():
 		for template in value:
 			if template[1] == min_evalue:
-				templates.add(template[1])
+				templates.add(template[0])
 
 	return templates
+
+def Download_template(template):
+	pdbl = PDBList()
+	pdbl.retrieve_pdb_file(template, obsolete=False, pdir="./", file_format="pdb")
+
+def Create_joined_fastas(input_PDB_objects):
+	polipeptide = PPBuilder()
+	first_line = True
+	filename = ""
+
+	for obj in input_PDB_objects:
+		filename = filename + obj.get_id()
+	filename = filename + ".fa"
+	joined_fasta = open(filename, 'w')
+
+	for obj in input_PDB_objects:
+		if first_line:
+			joined_fasta.write(">" + obj.get_id() + "\n")
+			first_line = False
+		else:
+			joined_fasta.write("\n" + ">" + obj.get_id() + "\n")
+		for polipep in polipeptide.build_peptides(obj):
+			joined_fasta.write(str(polipep.get_sequence()))
+
+	return filename
+
+def Create_fasta(input_pdb):
+	polipeptide = PPBuilder()
+	fist_chain = True
+	pdb = PDBParser().get_structure(input_pdb, "pdb" + input_pdb + ".ent")
+	for pp in polipeptide.build_peptides(pdb):
+		if fist_chain:
+			new_fasta = open(input_pdb + "_paired.fa", "w")
+			new_fasta.write(">" + input_pdb +"\n")
+			new_fasta.write(str(pp.get_sequence()))
+			fist_chain = False
+		else:
+			new_fasta.write(str(pp.get_sequence()))
+
+def Run_clustal(fastas):
+	for fasta in fastas:
+		clustalw_cline = ClustalwCommandline("clustalw2", infile=fasta)
+		stdout, stderr = clustalw_cline()
+		with open(fasta.split(".")[0] + "_ClustalScore.txt", 'w') as scores:
+			scores.write(stdout)
+
+def Analize_clustal_score(sc_file):
+	file = open(sc_file, 'r')
+	for line in file:
+		if line.startswith("Group "):
+			line = line.strip()
+			line = line.split()
 
 if __name__ == "__main__":
 
@@ -96,7 +148,8 @@ if __name__ == "__main__":
 	from Bio.PDB import PDBList
 	from Bio.Blast.Applications import NcbipsiblastCommandline as Ncbicmd
 	from Bio.Align.Applications import ClustalwCommandline
-	import Blast_align
+	import copy
+	#import Blast_align
 
 	parser = argparse.ArgumentParser(description="blah")
 
@@ -115,10 +168,49 @@ if __name__ == "__main__":
 
 	options=parser.parse_args()
 
-	(PDB_objects, PDB_names) = Parse_PDB(options.infiles)
-	PDB_prefix = SplitChain(PDB_objects)
+	# Parse input files
+	(PDB_input_objects, PDB_input_names) = Parse_PDB(options.infiles)
+	file_prefixes = SplitChain(PDB_input_objects)
+	bychain_PDBs = map(lambda x: x + ".pdb", file_prefixes)
+	(PDB_bychain_objects, PDB_bychain_names) = Parse_PDB(bychain_PDBs)
+
+	# Look for templates
 	BLAST_outs = []
-	for prefix in PDB_prefix:
+	for prefix in file_prefixes:
 		output = Run_BLAST(options.database, prefix)
 		BLAST_outs.append(output)
 	Templates = Select_template(BLAST_outs)
+
+	# Work with templates
+	fasta_names = []
+
+	for template in Templates:
+		Download_template(template)
+	temp_PDBs = map(lambda x: "pdb" + x + ".ent", Templates)
+	print("template pdbs")
+	print(temp_PDBs)
+	(PDB_temp_objs, PDB_temp_names) = Parse_PDB(temp_PDBs)	
+	print("template objects")
+	print(PDB_temp_objs)
+	template_chains = SplitChain(PDB_temp_objs)
+	print("template chains prefix")
+	print(template_chains)
+	bychain_PDBs = map(lambda x: x + ".pdb", template_chains)
+	print("template pdb by chain files")
+	print(bychain_PDBs)
+	(PDB_chain_temp_objs, PDB_chain_temp_names) = Parse_PDB(bychain_PDBs)
+	for chain in PDB_chain_temp_objs:
+		obj_list = copy.copy(PDB_bychain_objects)
+		obj_list.append(chain)
+		joined_file = Create_joined_fastas(obj_list)
+		fasta_names.append(joined_file)
+	Run_clustal(fasta_names)
+
+
+	# Check if all input chains are equal
+	"""joined_file = Create_joined_fastas(PDB_bychain_objects)
+	Run_clustal(joined_file)
+	clu_score = joined_file.split(".")[0] + "_ClustalScore.txt"
+	Analize_clustal_score(clu_score)"""
+
+	
