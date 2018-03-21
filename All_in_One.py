@@ -174,6 +174,27 @@ def Find_interactions(PDB_obj):
 	
 	return interact_chains
 
+def Assign_query_to_temp(targ_chain_list, temp_chains, Final_interactions, temp):
+	temp_chain_names = list(filter(lambda x: x[:-2] == temp ,temp_chains.keys()))
+	q_chain = targ_chain_list[0]
+	i = 0
+	while i < len(temp_chain_names):
+		if temp_chains[temp_chain_names[i]] == None:
+			if q_chain in Final_interactions["temps"][temp]["target_temp"][temp_chain_names[i]]:
+				temp_chains[temp_chain_names[i]] = q_chain
+				targ_chain_list.remove(q_chain)
+				
+				break
+			else:
+				i += 1
+		else:
+			i += 1
+	if len(targ_chain_list) >= 1:
+		Assign_query_to_temp(targ_chain_list, temp_chains, Final_interactions, temp)
+	else:
+		print(temp_chains)
+
+
 if __name__ == "__main__":
 
 	from Bio.PDB import PDBParser, PDBIO, PPBuilder
@@ -210,7 +231,20 @@ if __name__ == "__main__":
 	# Parse input files
 	(PDB_input_objects, PDB_input_names) = Parse_PDB(options.infiles)
 	file_prefixes = SplitChain(PDB_input_objects)
-	bychain_PDBs = map(lambda x: x + ".pdb", file_prefixes)
+
+	first = True
+	already_added = []
+	unique_chains = []
+	for pref in file_prefixes:
+		if first:
+			unique_chains.append(pref)
+			already_added.append(pref.split("_")[1])
+			first = False
+		if pref.split("_")[1] not in already_added:
+			unique_chains.append(pref)
+			already_added.append(pref.split("_")[1])
+
+	bychain_PDBs = map(lambda x: x + ".pdb", unique_chains)
 	(PDB_bychain_objects, PDB_bychain_names) = Parse_PDB(bychain_PDBs)
 	for inp in PDB_input_objects: # Add data to Final_interactions dictionary
 		inp_chains = inp.get_chains()
@@ -229,6 +263,7 @@ if __name__ == "__main__":
 
 	# Work with templates
 	fasta_names = []
+	temp_chains = {}
 
 	for template in Templates:
 		Download_template(template)
@@ -243,12 +278,25 @@ if __name__ == "__main__":
 		joined_file = Create_joined_fastas(obj_list)
 		fasta_names.append(joined_file)
 	Run_clustal(fasta_names)
+	first = True
 	for fa_name in fasta_names:
 		temp_name = fa_name.split("_")[-3] + "_" + fa_name.split("_")[-2]
+		if first:
+			tmp = temp_name[:-2]
+			Final_interactions["temps"][temp_name[:-2]] = {}
+			Final_interactions["temps"][temp_name[:-2]]["target_temp"] = {}
+			first = False
+		#print(temp_name)
+		temp_chains[temp_name] = None
 		aligns = Analize_clustal_score(fa_name.split(".")[0] + "ClustalScore.txt", temp_name)
-		Final_interactions["temps"][temp_name[:-2]] = {}
-		Final_interactions["temps"][temp_name[:-2]]["target_temp"] = {}
-		Final_interactions["temps"][temp_name[:-2]]["target_temp"][temp_name] = aligns
+		if tmp == temp_name[:-2]:
+			Final_interactions["temps"][temp_name[:-2]]["target_temp"][temp_name] = aligns
+		else:
+			Final_interactions["temps"][temp_name[:-2]] = {}
+			Final_interactions["temps"][temp_name[:-2]]["target_temp"] = {}
+			Final_interactions["temps"][temp_name[:-2]]["target_temp"][temp_name] = aligns
+			tmp = temp_name[:-2]
+			
 		Final_interactions["temps"][temp_name[:-2]]["temp_interact"] = {}
 		temp_obj = list(filter(lambda x: x.get_id() == temp_name[:-2], PDB_temp_objs))
 		list_interacts = Find_interactions(temp_obj[0])
@@ -258,7 +306,7 @@ if __name__ == "__main__":
 			else:
 				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]] = set(interact[1])
 	#print(Final_interactions)
-
+	Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, "pdb1dxu")
 
 
 	# Check if all input chains are equal
