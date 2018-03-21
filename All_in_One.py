@@ -139,8 +139,8 @@ def Analize_clustal_score(sc_file, temp_name):
 	file = open(sc_file, 'r')
 	equivalences = {}
 	aligns = []
-	equiv_reg = re.compile('("Sequence ")([0-9]+)(": ")(\S+)')
-	alig_reg = re.compile('("Sequences (")([0-9]+)(":")([0-9]+)(") Aligned. Score:  ")([0-9]+)')
+	equiv_reg = re.compile('(Sequence )([0-9]+)(: )(\S+)')
+	alig_reg = re.compile('(Sequences \()([0-9]+)(:)([0-9]+)(\) Aligned. Score:  )([0-9]+)')
 	for line in file:
 		if re.match(equiv_reg, line):
 			match = re.match(equiv_reg, line)
@@ -149,13 +149,12 @@ def Analize_clustal_score(sc_file, temp_name):
 				template = match[2]
 		elif re.match(alig_reg, line):
 			alig = re.match(alig_reg, line)
-			if (template == alig[2]) and (alig[6] == 100):
+			if (template == alig[2]) and (alig[6] == "100"):
 				aligns.append(equivalences[alig[4]]) 
-			elif (template == alig[4]) and (alig[6] == 100):
+			elif (template == alig[4]) and (alig[6] == "100"):
 				aligns.append(equivalences[alig[2]])
 
 	return aligns
-
 
 def Find_interactions(PDB_obj):
 	interact_chains = []
@@ -250,8 +249,6 @@ if __name__ == "__main__":
 		Final_interactions["temps"][temp_name[:-2]] = {}
 		Final_interactions["temps"][temp_name[:-2]]["target_temp"] = {}
 		Final_interactions["temps"][temp_name[:-2]]["target_temp"][temp_name] = aligns
-		# TO FINISH!!!!! save to the new dic target_chain : list of temp_chains
-		# I have added template chain : target_chains list
 		Final_interactions["temps"][temp_name[:-2]]["temp_interact"] = {}
 		temp_obj = list(filter(lambda x: x.get_id() == temp_name[:-2], PDB_temp_objs))
 		list_interacts = Find_interactions(temp_obj[0])
@@ -260,7 +257,7 @@ if __name__ == "__main__":
 				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]].update(interact[1])
 			else:
 				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]] = set(interact[1])
-	print(Final_interactions)
+	#print(Final_interactions)
 
 
 
