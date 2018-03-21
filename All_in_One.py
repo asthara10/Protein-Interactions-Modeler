@@ -100,7 +100,7 @@ def Create_joined_fastas(input_PDB_objects):
 	filename = ""
 
 	for obj in input_PDB_objects:
-		filename = filename + obj.get_id()
+		filename = filename + obj.get_id() + "_"
 	filename = filename + ".fa"
 	joined_fasta = open(filename, 'w')
 
@@ -115,7 +115,7 @@ def Create_joined_fastas(input_PDB_objects):
 
 	return filename
 
-def Create_fasta(input_pdb):
+"""def Create_fasta(input_pdb):
 	polipeptide = PPBuilder()
 	fist_chain = True
 	pdb = PDBParser().get_structure(input_pdb, "pdb" + input_pdb + ".ent")
@@ -126,29 +126,65 @@ def Create_fasta(input_pdb):
 			new_fasta.write(str(pp.get_sequence()))
 			fist_chain = False
 		else:
-			new_fasta.write(str(pp.get_sequence()))
+			new_fasta.write(str(pp.get_sequence()))"""
 
 def Run_clustal(fastas):
 	for fasta in fastas:
 		clustalw_cline = ClustalwCommandline("clustalw2", infile=fasta)
 		stdout, stderr = clustalw_cline()
-		with open(fasta.split(".")[0] + "_ClustalScore.txt", 'w') as scores:
+		with open(fasta.split(".")[0] + "ClustalScore.txt", 'w') as scores:
 			scores.write(stdout)
 
-def Analize_clustal_score(sc_file):
+def Analize_clustal_score(sc_file, temp_name):
 	file = open(sc_file, 'r')
+	equivalences = {}
+	aligns = []
+	equiv_reg = re.compile('("Sequence ")([0-9]+)(": ")(\S+)')
+	alig_reg = re.compile('("Sequences (")([0-9]+)(":")([0-9]+)(") Aligned. Score:  ")([0-9]+)')
 	for line in file:
-		if line.startswith("Group "):
-			line = line.strip()
-			line = line.split()
+		if re.match(equiv_reg, line):
+			match = re.match(equiv_reg, line)
+			equivalences[match[2]] = match[4]
+			if match[4] == temp_name:
+				template = match[2]
+		elif re.match(alig_reg, line):
+			alig = re.match(alig_reg, line)
+			if (template == alig[2]) and (alig[6] == 100):
+				aligns.append(equivalences[alig[4]]) 
+			elif (template == alig[4]) and (alig[6] == 100):
+				aligns.append(equivalences[alig[2]])
+
+	return aligns
+
+
+def Find_interactions(PDB_obj):
+	interact_chains = []
+
+	chains = Selection.unfold_entities(PDB_obj, 'C')
+
+	obj_atoms = Selection.unfold_entities(PDB_obj, 'A')
+	neighbors = NeighborSearch(obj_atoms)
+	for chain in chains:
+		atoms = Selection.unfold_entities(chain, 'A')
+		for center in atoms:
+			interactions = neighbors.search(center.coord,2.5,level='C')
+			ids = list(map(lambda x: x.get_id(), interactions))
+			if len(ids) > 1:
+				final_ids = list(filter(lambda x: x != chain.get_id(), ids))
+				interact_chains.append((chain.get_id(), final_ids))
+	
+	return interact_chains
 
 if __name__ == "__main__":
 
 	from Bio.PDB import PDBParser, PDBIO, PPBuilder
 	from Bio.PDB import PDBList
+	from Bio.PDB import NeighborSearch, Selection
 	from Bio.Blast.Applications import NcbipsiblastCommandline as Ncbicmd
 	from Bio.Align.Applications import ClustalwCommandline
 	import copy
+	import numpy
+	import re
 	#import Blast_align
 
 	parser = argparse.ArgumentParser(description="blah")
@@ -168,11 +204,22 @@ if __name__ == "__main__":
 
 	options=parser.parse_args()
 
+	Final_interactions = {}
+	Final_interactions["target_interacts"] = {}
+	Final_interactions["temps"] = {}
+
 	# Parse input files
 	(PDB_input_objects, PDB_input_names) = Parse_PDB(options.infiles)
 	file_prefixes = SplitChain(PDB_input_objects)
 	bychain_PDBs = map(lambda x: x + ".pdb", file_prefixes)
 	(PDB_bychain_objects, PDB_bychain_names) = Parse_PDB(bychain_PDBs)
+	for inp in PDB_input_objects: # Add data to Final_interactions dictionary
+		inp_chains = inp.get_chains()
+		inp_chains_ids = list(map(lambda x: x.get_id(), inp_chains))
+		if inp_chains_ids[0] not in Final_interactions["target_interacts"].keys():
+			Final_interactions["target_interacts"][inp_chains_ids[0]] = list(inp_chains_ids[1])
+		elif (inp_chains_ids[0] in Final_interactions["target_interacts"].keys()) and (inp_chains_ids[1] not in Final_interactions["target_interacts"][inp_chains_ids[0]]):
+			Final_interactions["target_interacts"][inp_chains_ids[0]].append(inp_chains_ids[1])
 
 	# Look for templates
 	BLAST_outs = []
@@ -187,17 +234,9 @@ if __name__ == "__main__":
 	for template in Templates:
 		Download_template(template)
 	temp_PDBs = map(lambda x: "pdb" + x + ".ent", Templates)
-	print("template pdbs")
-	print(temp_PDBs)
 	(PDB_temp_objs, PDB_temp_names) = Parse_PDB(temp_PDBs)	
-	print("template objects")
-	print(PDB_temp_objs)
 	template_chains = SplitChain(PDB_temp_objs)
-	print("template chains prefix")
-	print(template_chains)
 	bychain_PDBs = map(lambda x: x + ".pdb", template_chains)
-	print("template pdb by chain files")
-	print(bychain_PDBs)
 	(PDB_chain_temp_objs, PDB_chain_temp_names) = Parse_PDB(bychain_PDBs)
 	for chain in PDB_chain_temp_objs:
 		obj_list = copy.copy(PDB_bychain_objects)
@@ -205,6 +244,24 @@ if __name__ == "__main__":
 		joined_file = Create_joined_fastas(obj_list)
 		fasta_names.append(joined_file)
 	Run_clustal(fasta_names)
+	for fa_name in fasta_names:
+		temp_name = fa_name.split("_")[-3] + "_" + fa_name.split("_")[-2]
+		aligns = Analize_clustal_score(fa_name.split(".")[0] + "ClustalScore.txt", temp_name)
+		Final_interactions["temps"][temp_name[:-2]] = {}
+		Final_interactions["temps"][temp_name[:-2]]["target_temp"] = {}
+		Final_interactions["temps"][temp_name[:-2]]["target_temp"][temp_name] = aligns
+		# TO FINISH!!!!! save to the new dic target_chain : list of temp_chains
+		# I have added template chain : target_chains list
+		Final_interactions["temps"][temp_name[:-2]]["temp_interact"] = {}
+		temp_obj = list(filter(lambda x: x.get_id() == temp_name[:-2], PDB_temp_objs))
+		list_interacts = Find_interactions(temp_obj[0])
+		for interact in list_interacts:
+			if interact[0] in Final_interactions["temps"][temp_name[:-2]]["temp_interact"].keys():
+				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]].update(interact[1])
+			else:
+				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]] = set(interact[1])
+	print(Final_interactions)
+
 
 
 	# Check if all input chains are equal
