@@ -174,30 +174,112 @@ def Find_interactions(PDB_obj):
 	
 	return interact_chains
 
-def Assign_query_to_temp(targ_chain_list, temp_chains, Final_interactions, temp):
-	temp_chain_names = list(filter(lambda x: x[:-2] == temp ,temp_chains.keys()))
-	q_chain = targ_chain_list[0]
-	i = 0
-	while i < len(temp_chain_names):
-		if temp_chains[temp_chain_names[i]] == None:
-			if q_chain in Final_interactions["temps"][temp]["target_temp"][temp_chain_names[i]]:
-				temp_chains[temp_chain_names[i]] = q_chain
-				targ_chain_list.remove(q_chain)
-				
-				break
-			else:
-				i += 1
-		else:
-			i += 1
-	if len(targ_chain_list) >= 1:
-		Assign_query_to_temp(targ_chain_list, temp_chains, Final_interactions, temp)
+def Assign_query_to_temp(i, cand_list, temp_chains, Final_interactions, temp):
+	j = 0
+	targ = cand_list[i][0]
+	
+	if len(cand_list) < i :
+		return True
 	else:
-		print(temp_chains)
+		while j < len(cand_list[i][1]):
+			#hem de comprovar que el cand_list[i][1][j] no estigui agafat per cap objectiu anterior
+			if temp_chains[cand_list[i][1][j]] == None:
+				temp_chains[cand_list[i][1][j]] = targ
+				#si la relacio existeix en el objectiu
+				for prev_targ in Final_interactions["target_interacts"].keys():
+					if targ in Final_interactions["target_interacts"][prev_targ]:
+						for key, val in temp_chains.items():
+							if val == prev_targ:
+								prev_temp = key
+						#si no es compleix que la relacio existeix en el template
+						if temp_chains[cand_list[i][1][j]] not in Final_interactions["temps"][temp]["temp_interact"][key]:
+							#posar a none el valor del diccionari temp_chains
+							temp_chains[cand_list[i][1][j]] = None
+							j += 1
+							return False
+			else:
+				j += 1
+				return False
+			if Assign_query_to_temp(i+1, cand_list, temp_chains, Final_interactions, temp):
+				return True
+			j += 1
+		#posar a none el valor del diccionari temp_chains
+		#temp_chains[cand_list[i][1][j]] = None
+		return False
+
+def I_Assign_query_to_temp(targ_chain_list, temp_chains, Final_interactions, temp):
+	candidates = []
+	temporal_cand = []
+	#crear llista de  tuple (string,llistes candidats)
+	for target in targ_chain_list:
+		for template in Final_interactions["temps"][temp]["target_temp"].keys():
+			if target in Final_interactions["temps"][temp]["target_temp"][template]:
+				temporal_cand.append(template)
+		candidates.append((target, temporal_cand))
+		if temporal_cand != []:
+			temporal_cand = []
+		else:
+			return
+
+	#fer primera crida recursiva
+	Assign_query_to_temp(0, candidates, temp_chains, Final_interactions, temp)
+
+def Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains):
+	i = 0
+	ref_model = temp_obj[0]
+	ppbuild = PPBuilder()
+	template_chains = Selection.unfold_entities(temp_obj, 'C')
+	min_len1 = min(list(map(lambda x: len(ppbuild.build_peptides(x)[0].get_sequence()), template_chains)))
+	min_len2 = min(list(map(lambda x: len(ppbuild.build_peptides(x)[0].get_sequence()), PDB_bychain_objects)))
+	min_len = min([min_len1, min_len2])
+	atoms_to_be_aligned = range(2, min_len)
+
+	for sample_structure in PDB_bychain_objects:
+		sample_model = sample_structure[0]
+		ref_atoms = []
+		sample_atoms = []
+
+		for ref_chain in ref_model:
+			for key, val in temp_chains.items():
+				if val == sample_structure.get_id():
+					if key[:-2] == temp_obj.get_id():
+						temp_ch = key
+			if temp_obj.get_id() + "_" + ref_chain.get_id() == temp_ch:
+				for ref_res in ref_chain:
+					if ref_res.get_id()[1] in atoms_to_be_aligned:
+						ref_atoms.append(ref_res['CA'])
+
+		for sample_chain in sample_model:
+			for sample_res in sample_chain:
+				if sample_res.get_id()[1] in atoms_to_be_aligned:
+					sample_atoms.append(sample_res['CA'])
+
+		super_imposer = Superimposer()
+		super_imposer.set_atoms(ref_atoms, sample_atoms)
+		super_imposer.apply(sample_atoms)
+
+		#print(super_imposer.rms)
+		# possible millora si tenim temps, filtrar per rmsd
+
+		io = PDBIO()
+		io.set_structure(sample_structure)
+		io.save(temp_obj.get_id() + "_" + str(i) + "_aligned.pdb", write_end = False)
+		i += 1
+
+	j = copy.copy(i)
+	i = 1
+	file = open(temp_obj.get_id() + "_0_aligned.pdb", 'a')
+	while i < j:
+		file2 = open(temp_obj.get_id() + "_" + str(i) + "_aligned.pdb")
+		for line in file2:
+			file.write(line)
+		i += 1
+
 
 
 if __name__ == "__main__":
 
-	from Bio.PDB import PDBParser, PDBIO, PPBuilder
+	from Bio.PDB import PDBParser, PDBIO, PPBuilder, Superimposer
 	from Bio.PDB import PDBList
 	from Bio.PDB import NeighborSearch, Selection
 	from Bio.Blast.Applications import NcbipsiblastCommandline as Ncbicmd
@@ -306,7 +388,23 @@ if __name__ == "__main__":
 			else:
 				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]] = set(interact[1])
 	#print(Final_interactions)
-	Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, "pdb1dxu")
+
+
+	#asignation_results = Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, "pdb1a0u")
+	#for temp_obj in PDB_temp_objs:
+		#Superimpose_chains(temp_obj, PDB_bychain_objects)
+	for temp in PDB_temp_names:
+		I_Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, temp)
+
+	for temp_obj in PDB_temp_objs:
+		for key, val in temp_chains.items():
+			if (temp_obj.get_id() == key[:-2]) and (val != None):
+				#print("hola")
+				Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains)
+	#print(temp_chains)
+
+
+
 
 
 	# Check if all input chains are equal
