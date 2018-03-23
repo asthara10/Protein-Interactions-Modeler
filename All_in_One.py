@@ -156,8 +156,12 @@ def Analize_clustal_score(sc_file, temp_name):
 
 	return aligns
 
-def Find_interactions(PDB_obj):
-	interact_chains = []
+def Find_interactions(PDB_obj, inter):
+	if inter:
+		interact_chains = []
+		dist = 2.5
+	else:
+		dist = 1.0
 
 	chains = Selection.unfold_entities(PDB_obj, 'C')
 
@@ -166,13 +170,16 @@ def Find_interactions(PDB_obj):
 	for chain in chains:
 		atoms = Selection.unfold_entities(chain, 'A')
 		for center in atoms:
-			interactions = neighbors.search(center.coord,2.5,level='C')
-			ids = list(map(lambda x: x.get_id(), interactions))
-			if len(ids) > 1:
-				final_ids = list(filter(lambda x: x != chain.get_id(), ids))
-				interact_chains.append((chain.get_id(), final_ids))
-	
-	return interact_chains
+			interactions = neighbors.search(center.coord, dist ,level='C')
+			if inter:
+				ids = list(map(lambda x: x.get_id(), interactions))
+				if len(ids) > 1:
+					final_ids = list(filter(lambda x: x != chain.get_id(), ids))
+					interact_chains.append((chain.get_id(), final_ids))
+	if inter:
+		return interact_chains
+	else:
+		return True
 
 def Assign_query_to_temp(i, cand_list, temp_chains, Final_interactions, temp):
 	j = 0
@@ -192,7 +199,7 @@ def Assign_query_to_temp(i, cand_list, temp_chains, Final_interactions, temp):
 							if val == prev_targ:
 								prev_temp = key
 						#si no es compleix que la relacio existeix en el template
-						if temp_chains[cand_list[i][1][j]] not in Final_interactions["temps"][temp]["temp_interact"][key]:
+						if temp_chains[cand_list[i][1][j]] not in Final_interactions["temps"][temp]["temp_interact"][prev_tmp]:
 							#posar a none el valor del diccionari temp_chains
 							temp_chains[cand_list[i][1][j]] = None
 							j += 1
@@ -269,13 +276,12 @@ def Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains):
 	j = copy.copy(i)
 	i = 1
 	file = open(temp_obj.get_id() + "_0_aligned.pdb", 'a')
+	final_files.append(temp_obj.get_id() + "_0_aligned.pdb")
 	while i < j:
 		file2 = open(temp_obj.get_id() + "_" + str(i) + "_aligned.pdb")
 		for line in file2:
 			file.write(line)
 		i += 1
-
-
 
 if __name__ == "__main__":
 
@@ -287,6 +293,10 @@ if __name__ == "__main__":
 	import copy
 	import numpy
 	import re
+	#from Biskit.tools import testRoot
+	#from Biskit import PDBModel
+	#from ase import Atoms
+	#import pysic
 	#import Blast_align
 
 	parser = argparse.ArgumentParser(description="blah")
@@ -381,7 +391,7 @@ if __name__ == "__main__":
 			
 		Final_interactions["temps"][temp_name[:-2]]["temp_interact"] = {}
 		temp_obj = list(filter(lambda x: x.get_id() == temp_name[:-2], PDB_temp_objs))
-		list_interacts = Find_interactions(temp_obj[0])
+		list_interacts = Find_interactions(temp_obj[0], True)
 		for interact in list_interacts:
 			if interact[0] in Final_interactions["temps"][temp_name[:-2]]["temp_interact"].keys():
 				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]].update(interact[1])
@@ -396,21 +406,53 @@ if __name__ == "__main__":
 	for temp in PDB_temp_names:
 		I_Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, temp)
 
+	final_files = []
 	for temp_obj in PDB_temp_objs:
 		for key, val in temp_chains.items():
 			if (temp_obj.get_id() == key[:-2]) and (val != None):
 				#print("hola")
 				Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains)
-	#print(temp_chains)
+	
+	print(temp_chains)
+
+	correct_predictions = []
+
+	(PDB_final_objects, PDB_final_names) = Parse_PDB(final_files)
+	for final_obj in PDB_final_objects:
+		if not Find_interactions(final_obj, False):
+			correct_predictions.append(final_obj)
+
+	print(correct_predictions)
+	#Falta calcular per cada un dels final objs a coorect_predictions
+	# 1- l'energia (Z-score)
+
+	"""for name in correct_predictions:
+		ml = PDBModel(testRoot()+"./" + name + ".pdb")
+		ml = ml.compress(ml.maskProtein())
+		prosa = Prosa2003(ml)
+		energy = prosa.run()
+		print(energy)
+
+	for sis in correct_predictions:
+		system = Atoms(Selection.unfold_entities(sis, 'A'))
+		calc = pysic.Pysic()
+		system.set_calculator(calc)
+		physics = pysic.Potential('power', cutoff = 10.0)
+		#physics.set_symbols(['He', 'He'])
+		physics.set_parameter_value('epsilon', 0.1)
+		physics.set_parameter_value('sigma', 2.5)
+		calc.add_potential(physics)
+		system.get_potential_energy()
+
+		print(sis.get_id())
+		print(system)"""
+
+	#for sis in correct_predictions:
+	pp = PPBuilder()
+	print(PDB_final_objects[0].energy_of_structure(pp.build_peptided(PDB_final_objects[0])[0].get_sequence(), PDB_final_objects[0], 0))
+
+	# 2- obrir amb chimera // o retornar els nomes dels fitxers resultants i el Z-core pertinent.
 
 
-
-
-
-	# Check if all input chains are equal
-	"""joined_file = Create_joined_fastas(PDB_bychain_objects)
-	Run_clustal(joined_file)
-	clu_score = joined_file.split(".")[0] + "_ClustalScore.txt"
-	Analize_clustal_score(clu_score)"""
 
 	
