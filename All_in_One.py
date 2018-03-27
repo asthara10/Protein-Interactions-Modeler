@@ -474,20 +474,26 @@ if __name__ == "__main__":
 	import copy
 	import numpy
 	import re
+	import sys
 
 	parser = argparse.ArgumentParser(description="blah")
 
 	parser.add_argument('-i', '--input',
-				dest= "infiles",
-				action= "store",
+				dest = "infiles",
+				action = "store",
 				required = True,
 				nargs = "+",
-				help="Input file names (PDB files with pairs of chains that interact), insert as many as needed.")
+				help = "Input file names (PDB files with pairs of chains that interact), insert as many as needed.")
 	parser.add_argument('-d', '--database',
-				dest= "database",
-				action= "store",
+				dest = "database",
+				action = "store",
 				required = True,
-				help="Path to the pdb database in your computer.")
+				help = "Path to the pdb database in your computer.")
+	parser.add_argument('-v', '--verbose',
+				dest = "verbose",
+				action = "store",
+				default = False,
+				help = "Print progression log to the standard error.")
 	
 	options=parser.parse_args()
 
@@ -509,6 +515,9 @@ if __name__ == "__main__":
 	correct_predictions = []
 
 	# WORKING WITH THE INPUT
+
+	if options.verbose:
+		sys.stderr.print("Parsing input files...\n")
 
 	# Parse input files.
 	(PDB_input_objects, PDB_input_names) = ParsePDB(options.infiles)
@@ -539,6 +548,9 @@ if __name__ == "__main__":
 
 	# WORKING WITH TEMPLATES
 
+	if options.verbose:
+		sys.stderr.print("Searching templates...\n")
+
 	# Look for templates
 	for prefix in file_prefixes:
 		output = RunBLAST(options.database, prefix)
@@ -555,6 +567,9 @@ if __name__ == "__main__":
 	(PDB_chain_temp_objs, PDB_chain_temp_names) = ParsePDB(bychain_PDBs)
 
 	# MODELING
+
+	if options.verbose:
+		sys.stderr.print("Running ClustalW...\n")
 
 	# Creating a fasta file for each template chain adding all the input chains
 	for chain in PDB_chain_temp_objs:
@@ -598,10 +613,16 @@ if __name__ == "__main__":
 				Final_interactions["temps"][getNameWOChain(temp_name)]["temp_interact"][interact[0]].update(interact[1])
 			else:
 				Final_interactions["temps"][getNameWOChain(temp_name)]["temp_interact"][interact[0]] = set(interact[1])
-
+	
+	if options.verbose:
+		sys.stderr.print("Assigning target-template chain relations...\n")
+	
 	# Using a backtracking to assign chain relations (target-template)
 	for temp in PDB_temp_names:
 		I_AssignQueryToTemp(PDB_bychain_names, temp_chains, Final_interactions, temp)
+
+	if options.verbose:
+		sys.stderr.print("Superimposing chains...\n")
 
 	# Superimposing the chains
 	for temp_obj in PDB_temp_objs:
@@ -610,8 +631,10 @@ if __name__ == "__main__":
 		except Exception:
 			pass
 
-
 	# FINAL ANALYSIS OF THE OBTAINED MODELS
+
+	if options.verbose:
+		sys.stderr.print("Omitting models that contain clashes...\n")
 
 	# Analyzing obtained models
 	(PDB_final_objects, PDB_final_names) = ParsePDB(final_files)
@@ -619,4 +642,10 @@ if __name__ == "__main__":
 		if not FindInteractions(final_obj, False):
 			correct_predictions.append(final_name)
 
-	print("The generated files with the models are called: \n%s \nFeel free to further analyse the models and choose the one that you find more accurate." %(correct_predictions))
+	if options.verbose:
+		sys.stderr.print("The programme finished correctly.\n")
+
+	if len(correct_predictions) >= 1:
+		print("The generated files with the models are called: \n%s \nFeel free to further analyse the models and choose the one that you find more accurate." %(correct_predictions))
+	else:
+		print("Good models couldn't be found.")
