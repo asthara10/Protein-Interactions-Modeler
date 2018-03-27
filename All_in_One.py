@@ -517,7 +517,7 @@ if __name__ == "__main__":
 	# WORKING WITH THE INPUT
 
 	if options.verbose:
-		sys.stderr.print("Parsing input files...\n")
+		sys.stderr.write("Parsing input files...\n")
 
 	# Parse input files.
 	(PDB_input_objects, PDB_input_names) = ParsePDB(options.infiles)
@@ -549,7 +549,7 @@ if __name__ == "__main__":
 	# WORKING WITH TEMPLATES
 
 	if options.verbose:
-		sys.stderr.print("Searching templates...\n")
+		sys.stderr.write("Searching templates...\n")
 
 	# Look for templates
 	for prefix in file_prefixes:
@@ -569,7 +569,7 @@ if __name__ == "__main__":
 	# MODELING
 
 	if options.verbose:
-		sys.stderr.print("Running ClustalW...\n")
+		sys.stderr.write("Running ClustalW...\n")
 
 	# Creating a fasta file for each template chain adding all the input chains
 	for chain in PDB_chain_temp_objs:
@@ -615,14 +615,14 @@ if __name__ == "__main__":
 				Final_interactions["temps"][getNameWOChain(temp_name)]["temp_interact"][interact[0]] = set(interact[1])
 	
 	if options.verbose:
-		sys.stderr.print("Assigning target-template chain relations...\n")
+		sys.stderr.write("Assigning target-template chain relations...\n")
 	
 	# Using a backtracking to assign chain relations (target-template)
 	for temp in PDB_temp_names:
 		I_AssignQueryToTemp(PDB_bychain_names, temp_chains, Final_interactions, temp)
 
 	if options.verbose:
-		sys.stderr.print("Superimposing chains...\n")
+		sys.stderr.write("Superimposing chains...\n")
 
 	# Superimposing the chains
 	for temp_obj in PDB_temp_objs:
@@ -643,7 +643,7 @@ if __name__ == "__main__":
 			correct_predictions.append(final_name)
 
 	if options.verbose:
-		sys.stderr.print("The programme finished correctly.\n")
+		sys.stderr.write("The programme finished correctly.\n")
 
 	if len(correct_predictions) >= 1:
 		print("The generated files with the models are called: \n%s \nFeel free to further analyse the models and choose the one that you find more accurate." %(correct_predictions))
