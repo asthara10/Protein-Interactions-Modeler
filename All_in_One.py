@@ -634,7 +634,7 @@ if __name__ == "__main__":
 	# FINAL ANALYSIS OF THE OBTAINED MODELS
 
 	if options.verbose:
-		sys.stderr.print("Omitting models that contain clashes...\n")
+		sys.stderr.write("Omitting models that contain clashes...\n")
 
 	# Analyzing obtained models
 	(PDB_final_objects, PDB_final_names) = ParsePDB(final_files)
