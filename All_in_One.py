@@ -159,9 +159,9 @@ def Analize_clustal_score(sc_file, temp_name):
 def Find_interactions(PDB_obj, inter):
 	if inter:
 		interact_chains = []
-		dist = 2.5
+		dist = 5.0
 	else:
-		dist = 1.0
+		dist = 0.4
 
 	chains = Selection.unfold_entities(PDB_obj, 'C')
 
@@ -176,42 +176,99 @@ def Find_interactions(PDB_obj, inter):
 				if len(ids) > 1:
 					final_ids = list(filter(lambda x: x != chain.get_id(), ids))
 					interact_chains.append((chain.get_id(), final_ids))
+			else:
+				#if len(interactions) >= 1:
+				for interact in interactions:
+					if interact.get_id() != chain.get_id():
+						return True
+				else:
+					return False
 	if inter:
 		return interact_chains
-	else:
-		return True
+
+def getTargInteractionKeys():
+	return Final_interactions["target_interacts"].keys()
+
+def getTempInteractionKeys(temp):
+	return Final_interactions["temps"][temp]["temp_interact"].keys()
+
+def getChain(whole_name):
+	return whole_name[-1:]
+
+def getTempInteractions(temp_name, temp):
+	return Final_interactions["temps"][temp]["temp_interact"][getChain(temp_name)]
+
+def getTargetInteractions(targ_name):
+	return Final_interactions["target_interacts"][getChain(targ_name)]
 
 def Assign_query_to_temp(i, cand_list, temp_chains, Final_interactions, temp):
 	j = 0
-	targ = cand_list[i][0]
-	
-	if len(cand_list) < i :
+	#targ = cand_list[i][0]
+	if i >= len(cand_list):
 		return True
 	else:
+		targ = cand_list[i][0]
 		while j < len(cand_list[i][1]):
-			#hem de comprovar que el cand_list[i][1][j] no estigui agafat per cap objectiu anterior
-			if temp_chains[cand_list[i][1][j]] == None:
+			valid = True
+			if temp_chains[cand_list[i][1][j]] == None: #hem de comprovar que el cand_list[i][1][j] no estigui agafat per cap objectiu anterior
+				#print("Assignem %i:%s - %s"%(i,targ,cand_list[i][1][j]))
 				temp_chains[cand_list[i][1][j]] = targ
-				#si la relacio existeix en el objectiu
-				for prev_targ in Final_interactions["target_interacts"].keys():
-					if targ in Final_interactions["target_interacts"][prev_targ]:
-						for key, val in temp_chains.items():
-							if val == prev_targ:
-								prev_temp = key
-						#si no es compleix que la relacio existeix en el template
-						if temp_chains[cand_list[i][1][j]] not in Final_interactions["temps"][temp]["temp_interact"][prev_tmp]:
-							#posar a none el valor del diccionari temp_chains
-							temp_chains[cand_list[i][1][j]] = None
-							j += 1
-							return False
-			else:
-				j += 1
-				return False
-			if Assign_query_to_temp(i+1, cand_list, temp_chains, Final_interactions, temp):
-				return True
-			j += 1
-		#posar a none el valor del diccionari temp_chains
-		#temp_chains[cand_list[i][1][j]] = None
+				
+				for prev_temp in temp_chains.keys():
+					#si s'ha assignat un altre objectiu abans
+					if temp_chains[prev_temp] != None and temp_chains[prev_temp] != targ:
+						#si la relacio existeix en el objectiu
+						if getChain(targ) in getTargInteractionKeys() and getChain(temp_chains[prev_temp]) in getTargInteractionKeys(): 
+							if getChain(temp_chains[prev_temp]) in getTargetInteractions(targ) or getChain(targ) in getTargetInteractions(temp_chains[prev_temp]):
+								#S'ha de complir en el template
+								if getChain(prev_temp) in getTempInteractionKeys(temp):
+									if getChain(cand_list[i][1][j]) not in getTempInteractions(prev_temp, temp):
+										#print("target chain %s not in %s" %(getChain(cand_list[i][1][j]), getTempInteractions(prev_temp, temp)))
+										#print("SE SE SE no interaccionen!")
+										valid = False
+										break
+								else:
+									#print("target chain %s not in %s" %(getChain(targ), getTempInteractions(prev_temp, temp)))
+									#print("key does not exist: %s not in %s" %(getChain(prev_temp), getTempInteractionKeys(temp)))
+									#print("SE SE NE no interaccionen!")
+									valid = False
+									break
+						elif getChain(targ) in getTargInteractionKeys():
+							if getChain(temp_chains[prev_temp]) in getTargetInteractions(targ):
+								#S'ha de complir en el template
+								if getChain(prev_temp) in getTempInteractionKeys(temp):
+									if getChain(cand_list[i][1][j]) not in getTempInteractions(prev_temp, temp):
+										#print("SE NE SE no interaccionen!")
+										valid = False
+										break
+								else:
+									#print("SE NE NE no interaccionen!")
+									valid = False
+									break
+						elif getChain(temp_chains[prev_temp]) in getTargInteractionKeys():
+							if getChain(targ) in getTargetInteractions(temp_chains[prev_temp]):
+								#S'ha de complir en el template
+								if getChain(prev_temp) in getTempInteractionKeys(temp):
+									if getChain(cand_list[i][1][j]) not in getTempInteractions(prev_temp, temp):
+										#print("NE SE SE no interaccionen!")
+										valid = False
+										break
+								else:
+									#print("NE SE NE no interaccionen!")
+									valid = False
+									break
+						else:
+							#print("NE NE no interaccionen!")
+							valid = False
+							break
+
+				if valid:
+					if Assign_query_to_temp(i+1, cand_list, temp_chains, Final_interactions, temp):
+						return True
+				#print("Desassignem %i:%s - %s"%(i,targ,cand_list[i][1][j]))			
+				temp_chains[cand_list[i][1][j]] = None
+			
+			j += 1		
 		return False
 
 def I_Assign_query_to_temp(targ_chain_list, temp_chains, Final_interactions, temp):
@@ -227,7 +284,8 @@ def I_Assign_query_to_temp(targ_chain_list, temp_chains, Final_interactions, tem
 			temporal_cand = []
 		else:
 			return
-
+	#print("Candidates:")
+	#print(candidates)
 	#fer primera crida recursiva
 	Assign_query_to_temp(0, candidates, temp_chains, Final_interactions, temp)
 
@@ -399,13 +457,14 @@ if __name__ == "__main__":
 				Final_interactions["temps"][temp_name[:-2]]["temp_interact"][interact[0]] = set(interact[1])
 	#print(Final_interactions)
 
-
-	#asignation_results = Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, "pdb1a0u")
-	#for temp_obj in PDB_temp_objs:
-		#Superimpose_chains(temp_obj, PDB_bychain_objects)
 	for temp in PDB_temp_names:
+		#print("--Inici recurs---")
+		#print("Template actual: %s" %(temp))
 		I_Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, temp)
+		#print("--Fi recurs--")
+	#I_Assign_query_to_temp(PDB_bychain_names, temp_chains, Final_interactions, PDB_temp_names[0])
 
+	
 	final_files = []
 	for temp_obj in PDB_temp_objs:
 		for key, val in temp_chains.items():
@@ -413,14 +472,17 @@ if __name__ == "__main__":
 				#print("hola")
 				Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains)
 	
-	print(temp_chains)
+	#print(temp_chains)
 
 	correct_predictions = []
 
 	(PDB_final_objects, PDB_final_names) = Parse_PDB(final_files)
-	for final_obj in PDB_final_objects:
+	print(PDB_final_names)
+	for final_obj, final_name in zip(PDB_final_objects, PDB_final_names):
+		#print(Find_interactions(final_obj, False))
 		if not Find_interactions(final_obj, False):
-			correct_predictions.append(final_obj)
+			#print("hola")
+			correct_predictions.append(final_name)
 
 	print(correct_predictions)
 	#Falta calcular per cada un dels final objs a coorect_predictions
@@ -448,8 +510,8 @@ if __name__ == "__main__":
 		print(system)"""
 
 	#for sis in correct_predictions:
-	pp = PPBuilder()
-	print(PDB_final_objects[0].energy_of_structure(pp.build_peptided(PDB_final_objects[0])[0].get_sequence(), PDB_final_objects[0], 0))
+	#pp = PPBuilder()
+	#print(PDB_final_objects[0].energy_of_structure(pp.build_peptided(PDB_final_objects[0])[0].get_sequence(), PDB_final_objects[0], 0))
 
 	# 2- obrir amb chimera // o retornar els nomes dels fitxers resultants i el Z-core pertinent.
 
