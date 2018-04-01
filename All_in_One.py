@@ -446,7 +446,11 @@ def Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains):
 		# Superimpose.
 		super_imposer = Superimposer()
 		super_imposer.set_atoms(ref_atoms, sample_atoms)
-		super_imposer.apply(sample_atoms)
+		matrix = super_imposer.rotran
+
+		# Apply rotation and translation.
+		for atom in sample_structure.get_atoms():
+			atom.transform(matrix[0], matrix[1])
 
 		# Create a PDB file to save the new coordinates.
 		io = PDBIO()
@@ -629,6 +633,7 @@ if __name__ == "__main__":
 		try:
 			Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains)
 		except Exception:
+			print("exception")
 			pass
 
 	# FINAL ANALYSIS OF THE OBTAINED MODELS
