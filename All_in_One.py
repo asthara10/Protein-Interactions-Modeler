@@ -633,7 +633,6 @@ if __name__ == "__main__":
 		try:
 			Superimpose_chains(temp_obj, PDB_bychain_objects, temp_chains)
 		except Exception:
-			print("exception")
 			pass
 
 	# FINAL ANALYSIS OF THE OBTAINED MODELS
