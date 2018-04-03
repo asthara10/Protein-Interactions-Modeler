@@ -131,7 +131,7 @@ def CreateJoinedFastas(input_PDB_objects):
 
 	Arguments:
 
-	input_PDB_objects: list of PDB objects which sequence will be added to the FASTA file.
+	input_PDB_objects: list of PDB objects whose sequence will be added to the FASTA file.
 	"""
 
 	polipeptide = PPBuilder()
