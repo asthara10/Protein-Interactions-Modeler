@@ -1,13 +1,9 @@
 if __name__ == "__main__":
 
 	from Modules import FileParsersGenerators, GeneralFunctions, ProteinWorkingFunctions, RunningAnalyzingPrograms
-	#from Bio.PDB import PDBParser, PDBIO, PPBuilder, Superimposer,PDBList, NeighborSearch, Selection
-	#from Bio.Blast.Applications import NcbipsiblastCommandline as Ncbicmd
-	#from Bio.Align.Applications import ClustalwCommandline
 	import argparse
 	import copy
-	#import numpy
-	#import re
+	import os
 	import sys
 
 	parser = argparse.ArgumentParser(description="A program to model protein structures. It uses as an imput pairs of interacting chains (in PDB format) and models the whole structure by superimposition with the best templates.")
@@ -92,8 +88,14 @@ if __name__ == "__main__":
 	Templates = ProteinWorkingFunctions.SelectTemplate(BLAST_outs)
 
 	# Downloading, parsing and spliting by chain the templates
+	to_delete = []
 	for template in Templates:
 		ProteinWorkingFunctions.DownloadTemplate(template)
+		# If the template is not found in the PDB database.
+		if ("pdb" + template + ".ent") not in os.listdir('.'):
+			to_delete.append(template)
+	for todel in to_delete:
+		Templates.remove(todel)
 	temp_PDBs = map(lambda x: "pdb" + x + ".ent", Templates)
 	(PDB_temp_objs, PDB_temp_names) = FileParsersGenerators.ParsePDB(temp_PDBs)	
 	template_chains = FileParsersGenerators.SplitChain(PDB_temp_objs)
