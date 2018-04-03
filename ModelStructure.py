@@ -10,7 +10,7 @@ if __name__ == "__main__":
 	#import re
 	import sys
 
-	parser = argparse.ArgumentParser(description="blah")
+	parser = argparse.ArgumentParser(description="A program to model protein structures. It uses as an imput pairs of interacting chains (in PDB format) and models the whole structure by superimposition with the best templates.")
 
 	parser.add_argument('-i', '--input',
 				dest = "infiles",
