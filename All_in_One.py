@@ -158,7 +158,7 @@ def CreateJoinedFastas(input_PDB_objects):
 
 def RunClustal(fastas):
 	"""
-	Perform a multiple alignment running ClustalW.
+	Performs a multiple alignment running ClustalW.
 
 	Arguments:
 
@@ -245,13 +245,13 @@ def FindInteractions(PDB_obj, inter):
 	if inter:
 		return interact_chains
 
-def getNameWOChain(whole_name):
+def getNameWOChain(whole_name):#canviar nom amb SUbl
 	""" 
 	Gets the name without the chain of a protein ID (name will be of the format "abc").
 	
 	Arguments:
 
-	whole_name: name of the protein of format "abc_A"
+	whole_name: name of the protein in format "abc_A"
 	"""
 
 	return whole_name[:-2]
@@ -296,8 +296,8 @@ def getTargetInteractions(targ_name):
 
 def AssignQueryToTemp(i, cand_list, temp_chains, Final_interactions, temp):
 	"""
-	Performs a backtracking to assign each chain of the template with a chain of the target.
-	Takes into account the similarities between template-target chains and as a condition, 
+	Performs backtracking to assign each chain of the template to a chain of the target, taking into account 
+	the similarities between template-target chains and, as a condition, that
 	if two chains from the target interact, the two assigned chains from the template must also interact.
 
 	Arguments:
@@ -308,7 +308,7 @@ def AssignQueryToTemp(i, cand_list, temp_chains, Final_interactions, temp):
 	temp_chains: dictionary of each chain of each template as keys and None as values at the beginnint,
 		corresponding target chains will be saved in this dictionary.
 	Final_interactions: dictionary containing the equivalencies between target-template chains, the target interactions and the template interactions.
-	temp: tame of the actual tempalte.
+	temp: name of the actual tempalte.
 	"""
 
 	j = 0
@@ -381,7 +381,7 @@ def I_AssignQueryToTemp(targ_chain_list, temp_chains, Final_interactions, temp):
 	temp_chains: dictionary of each chain of each template as keys and None as values at the beginnint,
 		corresponding target chains will be saved in this dictionary.
 	Final_interactions: dictionary containing the equivalencies between target-template chains, the target interactions and the template interactions.
-	temp: tame of the actual tempalte.
+	temp: name of the actual tempalte.
 	"""
 
 	candidates = []
