@@ -129,7 +129,7 @@ if __name__ == "__main__":
 			if len(aligns) == 0:
 				aligns = RunningAnalyzingPrograms.AnalizeClustalScore(fa_name.split(".")[0] + "ClustalScore.txt", temp_name, 50)
 				if len(aligns) == 0:
-					print("Obtained templates are not good enough to trust the models, consider to use another approach to solve your problem.")
+					print("%s template is not good enough to trust its model, the program will continue but we recommend you to consider using another approach to solve your problem if this one is the only good model obtained.")
 					aligns = RunningAnalyzingPrograms.AnalizeClustalScore(fa_name.split(".")[0] + "ClustalScore.txt", temp_name, 0)
 		if tmp == GeneralFunctions.GetNameWOChain(temp_name):
 			Final_interactions["temps"][GeneralFunctions.GetNameWOChain(temp_name)]["target_temp"][temp_name] = aligns
@@ -163,7 +163,6 @@ if __name__ == "__main__":
 		try:
 			ProteinWorkingFunctions.SuperimposeChains(final_files, temp_obj, PDB_bychain_objects, temp_chains)
 		except Exception:
-			print("exception")
 			pass
 
 	# FINAL ANALYSIS OF THE OBTAINED MODELS
